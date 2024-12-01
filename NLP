@@ -1,0 +1,165 @@
+import spacy
+import re
+from typing import List, Dict, Any
+
+class EmotionalEntityMatcher:
+    def __init__(self, emotional_entities: Dict[str, str]):
+        """
+        Initialize the matcher with a dictionary of emotional entities.
+        
+        Args:
+            emotional_entities (Dict[str, str]): A dictionary where keys are entity names
+                and values are their emotional categories/relationships.
+        """
+        self.emotional_entities = emotional_entities
+        
+        # Load the French NLP model
+        self.nlp = spacy.load("fr_core_news_lg")
+    
+    def analyze_text(self, text: str, verbose: bool = True) -> Dict[str, Any]:
+        """
+        Analyze the text and match against emotional entities.
+        
+        Args:
+            text (str): The text to analyze
+            verbose (bool): Whether to print detailed analysis
+        
+        Returns:
+            Dict[str, Any]: Comprehensive analysis results
+        """
+        # Process the text
+        doc = self.nlp(text)
+        
+        # Results dictionary
+        results = {
+            "original_text": text,
+            "tokens": [],
+            "spacy_entities": [],
+            "emotional_matches": []
+        }
+        
+        # Analyze tokens
+        for token in doc:
+            token_info = {
+                "text": token.text,
+                "lemma": token.lemma_,
+                "pos": token.pos_,
+                "dependency": token.dep_
+            }
+            results["tokens"].append(token_info)
+            
+            if verbose:
+                print(f"Mot : {token.text}, Lemme : {token.lemma_}, "
+                      f"Type : {token.pos_}, Dépendance : {token.dep_}")
+        
+        # Analyze SpaCy-detected entities
+        if doc.ents:
+            for ent in doc.ents:
+                ent_info = {
+                    "text": ent.text,
+                    "label": ent.label_
+                }
+                results["spacy_entities"].append(ent_info)
+                
+                if verbose:
+                    print(f"Entité SpaCy : {ent.text}, Type : {ent.label_}")
+        
+        # Match against emotional entities
+        for name, category in self.emotional_entities.items():
+            # Use regex for flexible matching (case-insensitive)
+            matches = re.findall(rf'\b{re.escape(name)}\b', text, re.IGNORECASE)
+            if matches:
+                match_info = {
+                    "name": name,
+                    "category": category,
+                    "occurrences": len(matches)
+                }
+                results["emotional_matches"].append(match_info)
+                
+                if verbose:
+                    print(f"♥ Correspondance émotionnelle : {name} "
+                          f"(Catégorie : {category}, Occurrences : {len(matches)})")
+        
+        return results
+    
+    def find_emotional_context(self, text: str) -> List[Dict[str, Any]]:
+        """
+        Find the contextual information around emotional entities.
+        
+        Args:
+            text (str): The text to analyze
+        
+        Returns:
+            List[Dict[str, Any]]: Context for each emotional match
+        """
+        doc = self.nlp(text)
+        contexts = []
+        
+        for name in self.emotional_entities.keys():
+            # Find sentences containing the emotional entity
+            matching_sents = [
+                sent for sent in doc.sents 
+                if re.search(rf'\b{re.escape(name)}\b', sent.text, re.IGNORECASE)
+            ]
+            
+            for sent in matching_sents:
+                context = {
+                    "name": name,
+                    "sentence": sent.text,
+                    "tokens": [
+                        {"text": token.text, "pos": token.pos_, "dep": token.dep_}
+                        for token in sent
+                    ]
+                }
+                contexts.append(context)
+        
+        return contexts
+
+def main():
+    # Dictionnaire des entités émotionnelles (personnes proches, relations)
+    emotional_entities = {
+        "Maman": "Famille",
+        "Papa": "Famille",
+        "Grand-mère": "Famille",
+        "Grand-père": "Famille",
+        "Frère": "Famille",
+        "Sœur": "Famille",
+        "Amour": "Relation",
+        "Ami": "Relation",
+        "Meilleur ami": "Relation"
+    }
+    
+    # Phrases à analyser
+    phrases = [
+        "Maman est décédée hier soir, et son souvenir reste gravé dans mon cœur.",
+        "J'ai parlé avec mon meilleur ami de nos souvenirs d'enfance.",
+        "L'amour que je porte à ma famille est infiniment grand.",
+        "Mon frère m'a soutenu pendant les moments difficiles."
+    ]
+    
+    # Créer un matcher d'entités émotionnelles
+    matcher = EmotionalEntityMatcher(emotional_entities)
+    
+    # Analyser chaque phrase
+    for phrase in phrases:
+        print(f"\n--- Analyse de : {phrase} ---")
+        
+        # Analyse complète
+        results = matcher.analyze_text(phrase)
+        
+        # Trouver le contexte émotionnel
+        contexts = matcher.find_emotional_context(phrase)
+        
+        # Afficher les contextes émotionnels
+        if contexts:
+            print("\n🤍 Contextes émotionnels :")
+            for context in contexts:
+                print(f"Entité : {context['name']}")
+                print(f"Phrase : {context['sentence']}")
+                print("Analyse des tokens :")
+                for token in context['tokens']:
+                    print(f"  - {token['text']} (Type : {token['pos']}, Dépendance : {token['dep']})")
+                print()
+
+if __name__ == "__main__":
+    main()
